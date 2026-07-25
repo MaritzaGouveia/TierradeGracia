@@ -4,3 +4,5 @@ __pycache__/
 .DS_Store
 tierra_de_gracia_data.json
 galeria/
+.env
+.streamlit/secrets.toml

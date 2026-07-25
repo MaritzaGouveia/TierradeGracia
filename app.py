@@ -210,31 +210,54 @@ hr {
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
-#  PERSISTENCIA DE DATOS (JSON simple)
+#  CONEXIÓN A SUPABASE
 # ─────────────────────────────────────────────
-DATA_FILE = "tierra_de_gracia_data.json"
+from supabase import create_client
+from dotenv import load_dotenv
 
-def cargar_datos():
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {
-        "plantas": [],
-        "inversiones": [],
-        "tareas": [],
-        "galeria": []
-    }
+load_dotenv()
 
-def guardar_datos(data):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2, default=str)
 
-# Inicializar datos en session_state
-if "data" not in st.session_state:
-    st.session_state.data = cargar_datos()
 
-data = st.session_state.data
+SUPABASE_URL = st.secrets.get("SUPABASE_URL") or os.getenv("SUPABASE_URL")
+SUPABASE_KEY = st.secrets.get("SUPABASE_KEY") or os.getenv("SUPABASE_KEY")
 
+@st.cache_resource
+def get_supabase_client():
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+supabase = get_supabase_client()
+
+# ─────────────────────────────────────────────
+#  FUNCIONES DE DATOS (Supabase)
+# ─────────────────────────────────────────────
+def cargar_plantas():
+    res = supabase.table("plantas").select("*").order("id").execute()
+    return res.data
+
+def cargar_inversiones():
+    res = supabase.table("inversiones").select("*").order("id").execute()
+    return res.data
+
+def cargar_tareas():
+    res = supabase.table("tareas").select("*").order("id").execute()
+    return res.data
+
+def cargar_galeria():
+    res = supabase.table("galeria").select("*").order("id").execute()
+    return res.data
+
+def insertar_planta(registro):
+    supabase.table("plantas").insert(registro).execute()
+
+def insertar_inversion(registro):
+    supabase.table("inversiones").insert(registro).execute()
+
+def insertar_tarea(registro):
+    supabase.table("tareas").insert(registro).execute()
+
+def insertar_galeria(registro):
+    supabase.table("galeria").insert(registro).execute()
 # ─────────────────────────────────────────────
 #  SIDEBAR
 # ─────────────────────────────────────────────
@@ -289,9 +312,9 @@ def mostrar_logo_header(icono, titulo, subtitulo):
 if pagina == "🌿 Dashboard":
     mostrar_logo_header("🥑", "Tierra de Gracia", "Panel de Control · Cultivo de Aguacates")
 
-    plantas = data["plantas"]
-    inversiones = data["inversiones"]
-    tareas = data["tareas"]
+    plantas = cargar_plantas()
+    inversiones = cargar_inversiones()
+    tareas = cargar_tareas()
 
     total_plantas = len(plantas)
     total_invertido = sum(float(i.get("monto", 0)) for i in inversiones)
@@ -409,32 +432,32 @@ elif pagina == "🌱 Registro de Plantas":
             riego = st.selectbox("Tipo de riego", ["Goteo", "Aspersión", "Manual", "Lluvia"])
             notas = st.text_area("Notas", placeholder="Observaciones adicionales...", height=100)
 
-        if st.button("💾 Guardar Lote"):
-            if numero_lote and cantidad_matas > 0:
-                nuevo_lote = {
-                    "lote": numero_lote,
-                    "cantidad_matas": cantidad_matas,
-                    "variedad": variedad,
-                    "fecha_siembra": str(fecha_siembra),
-                    "zona": zona,
-                    "estado": estado,
-                    "origen": origen,
-                    "riego": riego,
-                    "notas": notas,
-                    "fecha_registro": str(date.today())
-                }
-                data["plantas"].append(nuevo_lote)
-                guardar_datos(data)
-                st.success(f"✅ {numero_lote} registrado con {cantidad_matas} matas.")
-            else:
-                st.error("El número de lote y la cantidad de matas son obligatorios.")
-        st.markdown('</div>', unsafe_allow_html=True)
+            if st.button("💾 Guardar Lote"):
+                if numero_lote and cantidad_matas > 0:
+                    nuevo_lote = {
+                        "lote": numero_lote,
+                        "cantidad_matas": cantidad_matas,
+                        "variedad": variedad,
+                        "fecha_siembra": str(fecha_siembra),
+                        "zona": zona,
+                        "estado": estado,
+                        "origen": origen,
+                        "riego": riego,
+                        "notas": notas,
+                        "fecha_registro": str(date.today())
+                    }
+                    insertar_planta(nuevo_lote)
+                    st.success(f"✅ {numero_lote} registrado con {cantidad_matas} matas.")
+                else:
+                    st.error("El número de lote y la cantidad de matas son obligatorios.")
+
+            st.markdown('</div>', unsafe_allow_html=True)
 
     with tab2:
         st.markdown('<div class="section-card"><div class="section-title">Listado de Lotes</div>', unsafe_allow_html=True)
-        if data["plantas"]:
-            df_p = pd.DataFrame(data["plantas"])
-
+        plantas_data = cargar_plantas()
+        if plantas_data:
+            df_p = pd.DataFrame(plantas_data)
             # Asegura que cantidad_matas existe (compatibilidad con registros viejos)
             if "cantidad_matas" not in df_p.columns:
                 df_p["cantidad_matas"] = 1
@@ -494,23 +517,23 @@ elif pagina == "💰 Inversiones & Gastos":
             notas_inv = st.text_area("Notas", height=80)
 
         if st.button("💾 Guardar Inversión"):
-            if descripcion and monto > 0:
-                nueva_inv = {
-                    "descripcion": descripcion, "categoria": categoria,
-                    "monto": monto, "metodo": metodo,
-                    "fecha": str(fecha_inv), "proyecto": proyecto, "notas": notas_inv
-                }
-                data["inversiones"].append(nueva_inv)
-                guardar_datos(data)
-                st.success(f"✅ Gasto de ${monto:,.2f} registrado.")
-            else:
-                st.error("Completa la descripción y el monto.")
+                if descripcion and monto > 0:
+                    nueva_inv = {
+                        "descripcion": descripcion, "categoria": categoria,
+                        "monto": monto, "metodo": metodo,
+                        "fecha": str(fecha_inv), "proyecto": proyecto, "notas": notas_inv
+                    }
+                    insertar_inversion(nueva_inv)
+                    st.success(f"✅ Gasto de ${monto:,.2f} registrado.")
+                else:
+                    st.error("Completa la descripción y el monto.")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with tab2:
         st.markdown('<div class="section-card"><div class="section-title">Historial de Inversiones</div>', unsafe_allow_html=True)
-        if data["inversiones"]:
-            df_inv = pd.DataFrame(data["inversiones"])
+        inversiones_data = cargar_inversiones()
+        if inversiones_data:
+            df_inv = pd.DataFrame(inversiones_data)
             df_inv["monto"] = pd.to_numeric(df_inv["monto"])
 
             total = df_inv["monto"].sum()
@@ -579,8 +602,7 @@ elif pagina == "✅ Tareas & Actividades":
                     "descripcion": desc_t,
                     "fecha_creacion": str(date.today())
                 }
-                data["tareas"].append(nueva_t)
-                guardar_datos(data)
+                insertar_tarea(nueva_t)
                 st.success("✅ Tarea guardada correctamente.")
             else:
                 st.error("El título es obligatorio.")
@@ -588,24 +610,26 @@ elif pagina == "✅ Tareas & Actividades":
 
     with tab2:
         st.markdown('<div class="section-card"><div class="section-title">Lista de Tareas</div>', unsafe_allow_html=True)
-        if data["tareas"]:
+        tareas_data = cargar_tareas()
+        if tareas_data:
             c_f1, c_f2 = st.columns(2)
             with c_f1:
                 filtro_est = st.selectbox("Filtrar por estado", ["Todos","Pendiente","En progreso","Completada"])
             with c_f2:
                 filtro_pri = st.selectbox("Filtrar por prioridad", ["Todos","Alta","Media","Baja"])
 
-            df_t = pd.DataFrame(data["tareas"])
+            df_t = pd.DataFrame(tareas_data)
+
             if filtro_est != "Todos":
                 df_t = df_t[df_t["estado"] == filtro_est]
             if filtro_pri != "Todos":
                 df_t = df_t[df_t["prioridad"] == filtro_pri]
 
-            pendientes = len([t for t in data["tareas"] if t["estado"] == "Pendiente"])
-            completadas = len([t for t in data["tareas"] if t["estado"] == "Completada"])
+            pendientes = len([t for t in tareas_data if t["estado"] == "Pendiente"])
+            completadas = len([t for t in tareas_data if t["estado"] == "Completada"])
 
             m1, m2, m3 = st.columns(3)
-            m1.metric("Total", len(data["tareas"]))
+            m1.metric("Total", len(tareas_data))
             m2.metric("Pendientes", pendientes)
             m3.metric("Completadas", completadas)
 
@@ -636,25 +660,26 @@ elif pagina == "📷 Galería":
     foto = st.file_uploader("Selecciona una imagen", type=["jpg","jpeg","png","webp"])
 
     if st.button("📤 Subir Foto") and foto:
-        galeria_dir = Path("galeria")
-        galeria_dir.mkdir(exist_ok=True)
         nombre_archivo = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{foto.name}"
-        ruta = galeria_dir / nombre_archivo
-        with open(ruta, "wb") as f:
-            f.write(foto.getbuffer())
-        data["galeria"].append({
+        contenido = foto.getbuffer().tobytes()
+
+        supabase.storage.from_("galeria").upload(
+            nombre_archivo, contenido,
+            {"content-type": foto.type}
+        )
+        url_publica = supabase.storage.from_("galeria").get_public_url(nombre_archivo)
+
+        insertar_galeria({
             "titulo": titulo_foto, "categoria": categoria_foto,
             "fecha": str(fecha_foto), "notas": notas_foto,
-            "archivo": str(ruta)
+            "archivo_url": url_publica
         })
-        guardar_datos(data)
         st.success("✅ Foto guardada en la galería.")
     st.markdown('</div>', unsafe_allow_html=True)
 
     # Mostrar galería
     st.markdown('<div class="section-card"><div class="section-title">📸 Fotos del Proyecto</div>', unsafe_allow_html=True)
-    galeria_dir = Path("galeria")
-    fotos_guardadas = data.get("galeria", [])
+    fotos_guardadas = cargar_galeria()
 
     if fotos_guardadas:
         filtro_cat = st.selectbox("Filtrar categoría", ["Todas","General","Plantas","Zona","Problema","Progreso","Cosecha"])
@@ -662,10 +687,10 @@ elif pagina == "📷 Galería":
 
         cols = st.columns(3)
         for i, foto_data in enumerate(reversed(fotos_filtradas)):
-            ruta = foto_data.get("archivo","")
-            if os.path.exists(ruta):
+            url = foto_data.get("archivo_url", "")
+            if url:
                 with cols[i % 3]:
-                    st.image(ruta, use_container_width=True)
+                    st.image(url, use_container_width=True)
                     st.markdown(f"""
                     <div style="color:#c8a96e;font-size:0.8rem;font-weight:600;">{foto_data.get('titulo','Sin título')}</div>
                     <div style="color:#8fba4e;font-size:0.7rem;">{foto_data.get('categoria','')} · {foto_data.get('fecha','')}</div>
