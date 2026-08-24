@@ -1,4 +1,1 @@
-```pip-requirements
-
-plotly
-```
+streamlit pandas plotly supabase python-dotenv
