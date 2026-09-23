@@ -247,6 +247,12 @@ def cargar_galeria():
 def insertar_planta(registro):
     supabase.table("plantas").insert(registro).execute()
 
+def actualizar_planta(id, registro):
+    supabase.table("plantas").update(registro).eq("id", id).execute()
+
+def eliminar_planta(id):
+    supabase.table("plantas").delete().eq("id", id).execute()    
+
 def insertar_inversion(registro):
     supabase.table("inversiones").insert(registro).execute()
 
@@ -455,39 +461,73 @@ elif pagina == "🌱 Registro de Plantas":
         plantas_data = cargar_plantas()
         if plantas_data:
             df_p = pd.DataFrame(plantas_data)
-            # Asegura que cantidad_matas existe (compatibilidad con registros viejos)
             if "cantidad_matas" not in df_p.columns:
                 df_p["cantidad_matas"] = 1
             if "lote" not in df_p.columns:
                 df_p["lote"] = df_p.get("id", "—")
 
             filtro = st.selectbox("Filtrar por estado", ["Todos", "Viva", "En observación", "Muerta"])
-            if filtro != "Todos":
-                df_p = df_p[df_p["estado"] == filtro]
+            df_filtrado = df_p if filtro == "Todos" else df_p[df_p["estado"] == filtro]
 
-            # Totales
-            total_matas = pd.to_numeric(df_p["cantidad_matas"], errors="coerce").fillna(0).astype(int).sum()
-            total_lotes = len(df_p)
+            total_matas = pd.to_numeric(df_filtrado["cantidad_matas"], errors="coerce").fillna(0).astype(int).sum()
+            total_lotes = len(df_filtrado)
             m1, m2 = st.columns(2)
             m1.metric("🌱 Total Lotes", total_lotes)
             m2.metric("🥑 Total Matas", total_matas)
 
-            st.dataframe(df_p[["lote","cantidad_matas","variedad","fecha_siembra","zona","estado","riego","notas"]].rename(columns={
-                "lote": "Lote",
-                "cantidad_matas": "Matas",
-                "variedad": "Variedad",
-                "fecha_siembra": "Fecha Siembra",
-                "zona": "Zona",
-                "estado": "Estado",
-                "riego": "Riego",
-                "notas": "Notas"
+            st.dataframe(df_filtrado[["lote","cantidad_matas","variedad","fecha_siembra","zona","estado","riego","notas"]].rename(columns={
+                "lote": "Lote", "cantidad_matas": "Matas", "variedad": "Variedad",
+                "fecha_siembra": "Fecha Siembra", "zona": "Zona", "estado": "Estado",
+                "riego": "Riego", "notas": "Notas"
             }), use_container_width=True, hide_index=True)
 
             st.caption(f"Mostrando {total_lotes} lote(s) · {total_matas} matas en total")
+
+            # ── Editar o eliminar ──
+            st.markdown("---")
+            with st.expander("✏️ Editar o eliminar un lote"):
+                opciones = {f"{row['lote']} (id {row['id']})": row for _, row in df_p.iterrows()}
+                seleccion = st.selectbox("Selecciona el lote", list(opciones.keys()))
+                registro = opciones[seleccion]
+                reg_id = registro["id"]
+
+                ec1, ec2, ec3 = st.columns(3)
+                with ec1:
+                    e_lote = st.text_input("Número de Lote", value=registro.get("lote",""), key="e_lote")
+                    e_matas = st.number_input("Cantidad de Matas", min_value=1, step=1, value=int(registro.get("cantidad_matas",1)), key="e_matas")
+                    e_fecha = st.text_input("Fecha de siembra", value=str(registro.get("fecha_siembra","")), key="e_fecha")
+                with ec2:
+                    variedades = ["Choquette", "Hass", "Criollo"]
+                    e_variedad = st.selectbox("Variedad", variedades, index=variedades.index(registro.get("variedad","Hass")) if registro.get("variedad") in variedades else 0, key="e_variedad")
+                    e_zona = st.text_input("Zona / Parcela", value=registro.get("zona",""), key="e_zona")
+                    estados = ["Viva", "En observación", "Muerta"]
+                    e_estado = st.selectbox("Estado actual", estados, index=estados.index(registro.get("estado","Viva")) if registro.get("estado") in estados else 0, key="e_estado")
+                with ec3:
+                    origenes = ["Semilla propia", "Vivero", "Injerto", "Otro"]
+                    e_origen = st.selectbox("Origen", origenes, index=origenes.index(registro.get("origen","Vivero")) if registro.get("origen") in origenes else 0, key="e_origen")
+                    riegos = ["Goteo", "Aspersión", "Manual", "Lluvia"]
+                    e_riego = st.selectbox("Tipo de riego", riegos, index=riegos.index(registro.get("riego","Goteo")) if registro.get("riego") in riegos else 0, key="e_riego")
+                    e_notas = st.text_area("Notas", value=registro.get("notas",""), key="e_notas")
+
+                bc1, bc2 = st.columns(2)
+                with bc1:
+                    if st.button("💾 Guardar cambios", key="btn_edit_planta"):
+                        actualizar_planta(reg_id, {
+                            "lote": e_lote, "cantidad_matas": e_matas, "variedad": e_variedad,
+                            "fecha_siembra": e_fecha, "zona": e_zona, "estado": e_estado,
+                            "origen": e_origen, "riego": e_riego, "notas": e_notas
+                        })
+                        st.success("✅ Lote actualizado.")
+                        st.rerun()
+                with bc2:
+                    if st.button("🗑️ Eliminar lote", key="btn_del_planta"):
+                        eliminar_planta(reg_id)
+                        st.success("🗑️ Lote eliminado.")
+                        st.rerun()
         else:
             st.info("Aún no hay lotes registrados. ¡Agrega el primero!")
         st.markdown('</div>', unsafe_allow_html=True)
-
+    
 # ═══════════════════════════════════════════════
 #  PÁGINA: INVERSIONES & GASTOS
 # ═══════════════════════════════════════════════
