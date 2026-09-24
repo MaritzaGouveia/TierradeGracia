@@ -356,12 +356,21 @@ if pagina == "🌿 Dashboard":
             <div class="metric-delta">En buen estado</div>
         </div>""", unsafe_allow_html=True)
     with c3:
+        if "mostrar_monto" not in st.session_state:
+            st.session_state.mostrar_monto = True
+
+        valor_mostrado = f"${total_invertido:,.0f}" if st.session_state.mostrar_monto else "$ ****"
+
         st.markdown(f"""
         <div class="metric-card">
             <div class="metric-label">💰 Total Invertido</div>
-            <div class="metric-value">${total_invertido:,.0f}</div>
+            <div class="metric-value">{valor_mostrado}</div>
             <div class="metric-delta">Inversión acumulada</div>
         </div>""", unsafe_allow_html=True)
+
+        if st.button("👁️ Ocultar" if st.session_state.mostrar_monto else "👁️ Mostrar", key="btn_toggle_monto"):
+            st.session_state.mostrar_monto = not st.session_state.mostrar_monto
+            st.rerun()
     with c4:
         st.markdown(f"""
         <div class="metric-card">
