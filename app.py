@@ -707,10 +707,11 @@ elif pagina == "✅ Tareas & Actividades":
 
             df_t = pd.DataFrame(tareas_data)
 
+            df_t_filtrado = df_t.copy()
             if filtro_est != "Todos":
-                df_t = df_t[df_t["estado"] == filtro_est]
+                df_t_filtrado = df_t_filtrado[df_t_filtrado["estado"] == filtro_est]
             if filtro_pri != "Todos":
-                df_t = df_t[df_t["prioridad"] == filtro_pri]
+                df_t_filtrado = df_t_filtrado[df_t_filtrado["prioridad"] == filtro_pri]
 
             pendientes = len([t for t in tareas_data if t["estado"] == "Pendiente"])
             completadas = len([t for t in tareas_data if t["estado"] == "Completada"])
@@ -720,11 +721,48 @@ elif pagina == "✅ Tareas & Actividades":
             m2.metric("Pendientes", pendientes)
             m3.metric("Completadas", completadas)
 
-            st.dataframe(df_t.rename(columns={
+            st.dataframe(df_t_filtrado.rename(columns={
                 "titulo":"Tarea","categoria":"Categoría","prioridad":"Prioridad",
                 "fecha":"Fecha límite","asignado":"Asignado","estado":"Estado"
             })[["Tarea","Categoría","Prioridad","Fecha límite","Asignado","Estado"]],
             use_container_width=True, hide_index=True)
+
+            st.markdown("---")
+            with st.expander("✏️ Editar o eliminar una tarea"):
+                opciones = {f"{row['titulo']} (id {row['id']})": row for _, row in df_t.iterrows()}
+                seleccion = st.selectbox("Selecciona la tarea", list(opciones.keys()))
+                registro = opciones[seleccion]
+                reg_id = registro["id"]
+
+                ec1, ec2 = st.columns(2)
+                with ec1:
+                    e_titulo = st.text_input("Título", value=registro.get("titulo",""), key="e_titulo")
+                    categorias = ["Riego", "Fertilización", "Poda", "Control de plagas", "Siembra", "Cosecha", "Mantenimiento", "Otro"]
+                    e_cat = st.selectbox("Categoría", categorias, index=categorias.index(registro.get("categoria","Otro")) if registro.get("categoria") in categorias else 0, key="e_cat_t")
+                    prioridades = ["Alta", "Media", "Baja"]
+                    e_prioridad = st.selectbox("Prioridad", prioridades, index=prioridades.index(registro.get("prioridad","Media")) if registro.get("prioridad") in prioridades else 0, key="e_prioridad")
+                with ec2:
+                    e_fecha = st.text_input("Fecha límite", value=str(registro.get("fecha","")), key="e_fecha_t")
+                    asignados = ["Yo", "Hermano", "Ambos", "Trabajador"]
+                    e_asignado = st.selectbox("Asignado a", asignados, index=asignados.index(registro.get("asignado","Yo")) if registro.get("asignado") in asignados else 0, key="e_asignado")
+                    estados = ["Pendiente", "En progreso", "Completada"]
+                    e_estado = st.selectbox("Estado", estados, index=estados.index(registro.get("estado","Pendiente")) if registro.get("estado") in estados else 0, key="e_estado_t")
+                e_desc = st.text_area("Descripción", value=registro.get("descripcion",""), key="e_desc_t")
+
+                bc1, bc2 = st.columns(2)
+                with bc1:
+                    if st.button("💾 Guardar cambios", key="btn_edit_tarea"):
+                        actualizar_tarea(reg_id, {
+                            "titulo": e_titulo, "categoria": e_cat, "prioridad": e_prioridad,
+                            "fecha": e_fecha, "asignado": e_asignado, "estado": e_estado, "descripcion": e_desc
+                        })
+                        st.success("✅ Tarea actualizada.")
+                        st.rerun()
+                with bc2:
+                    if st.button("🗑️ Eliminar tarea", key="btn_del_tarea"):
+                        eliminar_tarea(reg_id)
+                        st.success("🗑️ Tarea eliminada.")
+                        st.rerun()
         else:
             st.info("No hay tareas registradas aún.")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -782,6 +820,10 @@ elif pagina == "📷 Galería":
                     <div style="color:#c8a96e;font-size:0.8rem;font-weight:600;">{foto_data.get('titulo','Sin título')}</div>
                     <div style="color:#8fba4e;font-size:0.7rem;">{foto_data.get('categoria','')} · {foto_data.get('fecha','')}</div>
                     """, unsafe_allow_html=True)
+                    if st.button("🗑️ Eliminar", key=f"del_foto_{foto_data['id']}"):
+                        eliminar_galeria_item(foto_data['id'])
+                        st.success("🗑️ Foto eliminada.")
+                        st.rerun()
     else:
         st.info("Sube la primera foto de tu cultivo.")
     st.markdown('</div>', unsafe_allow_html=True)
