@@ -256,11 +256,26 @@ def eliminar_planta(id):
 def insertar_inversion(registro):
     supabase.table("inversiones").insert(registro).execute()
 
+def actualizar_inversion(id, registro):
+    supabase.table("inversiones").update(registro).eq("id", id).execute()
+
+def eliminar_inversion(id):
+    supabase.table("inversiones").delete().eq("id", id).execute()
+
 def insertar_tarea(registro):
     supabase.table("tareas").insert(registro).execute()
 
+def actualizar_tarea(id, registro):
+    supabase.table("tareas").update(registro).eq("id", id).execute()
+
+def eliminar_tarea(id):
+    supabase.table("tareas").delete().eq("id", id).execute()
+
 def insertar_galeria(registro):
     supabase.table("galeria").insert(registro).execute()
+
+def eliminar_galeria_item(id):
+    supabase.table("galeria").delete().eq("id", id).execute()
 # ─────────────────────────────────────────────
 #  SIDEBAR
 # ─────────────────────────────────────────────
@@ -580,7 +595,6 @@ elif pagina == "💰 Inversiones & Gastos":
                 <div class="metric-value">${total:,.2f}</div>
             </div>""", unsafe_allow_html=True)
 
-            # Gráfico de evolución
             df_inv["fecha"] = pd.to_datetime(df_inv["fecha"])
             df_inv_sorted = df_inv.sort_values("fecha")
             df_inv_sorted["acumulado"] = df_inv_sorted["monto"].cumsum()
@@ -602,10 +616,46 @@ elif pagina == "💰 Inversiones & Gastos":
                 "monto":"Monto ($)","metodo":"Pago","fecha":"Fecha",
                 "proyecto":"Proyecto","notas":"Notas"
             }), use_container_width=True, hide_index=True)
+
+            st.markdown("---")
+            with st.expander("✏️ Editar o eliminar una inversión"):
+                df_raw = pd.DataFrame(inversiones_data)
+                opciones = {f"{row['descripcion']} - ${float(row['monto']):,.2f} (id {row['id']})": row for _, row in df_raw.iterrows()}
+                seleccion = st.selectbox("Selecciona la inversión", list(opciones.keys()))
+                registro = opciones[seleccion]
+                reg_id = registro["id"]
+
+                ec1, ec2, ec3 = st.columns(3)
+                with ec1:
+                    e_desc = st.text_input("Descripción", value=registro.get("descripcion",""), key="e_desc")
+                    categorias = ["Siembra", "Fertilizante", "Riego", "Herramientas", "Mano de obra", "Cercado", "Transporte", "Otro"]
+                    e_cat = st.selectbox("Categoría", categorias, index=categorias.index(registro.get("categoria","Otro")) if registro.get("categoria") in categorias else 0, key="e_cat")
+                with ec2:
+                    e_monto = st.number_input("Monto ($)", min_value=0.0, step=0.50, value=float(registro.get("monto",0)), key="e_monto")
+                    metodos = ["Efectivo", "Transferencia", "Tarjeta", "Otro"]
+                    e_metodo = st.selectbox("Método de pago", metodos, index=metodos.index(registro.get("metodo","Efectivo")) if registro.get("metodo") in metodos else 0, key="e_metodo")
+                with ec3:
+                    e_fecha = st.text_input("Fecha", value=str(registro.get("fecha","")), key="e_fecha_inv")
+                    e_proyecto = st.text_input("Proyecto / Partida", value=registro.get("proyecto",""), key="e_proyecto")
+                    e_notas = st.text_area("Notas", value=registro.get("notas",""), key="e_notas_inv")
+
+                bc1, bc2 = st.columns(2)
+                with bc1:
+                    if st.button("💾 Guardar cambios", key="btn_edit_inv"):
+                        actualizar_inversion(reg_id, {
+                            "descripcion": e_desc, "categoria": e_cat, "monto": e_monto,
+                            "metodo": e_metodo, "fecha": e_fecha, "proyecto": e_proyecto, "notas": e_notas
+                        })
+                        st.success("✅ Inversión actualizada.")
+                        st.rerun()
+                with bc2:
+                    if st.button("🗑️ Eliminar inversión", key="btn_del_inv"):
+                        eliminar_inversion(reg_id)
+                        st.success("🗑️ Inversión eliminada.")
+                        st.rerun()
         else:
             st.info("No hay inversiones registradas aún.")
         st.markdown('</div>', unsafe_allow_html=True)
-
 # ═══════════════════════════════════════════════
 #  PÁGINA: TAREAS & ACTIVIDADES
 # ═══════════════════════════════════════════════
